@@ -3,15 +3,15 @@ import pdfplumber
 import pandas as pd
 import io
 import re
+import numpy as np
 
 st.set_page_config(page_title="HKDSE 全科數據轉換工具", layout="centered")
 
 st.title("📊 HKDSE 項目分析報告轉 Excel 工具")
-st.write("請上傳考評局的 PDF 報告（支援**所有科目**），系統會自動提取數據、消除空欄，並**將所有數據向右對齊**。")
+st.write("請上傳考評局的 PDF 報告，系統會自動提取、向右對齊、刪除多餘空欄，並**將成績轉為真實數字格式**以便計算。")
 
 uploaded_file = st.file_uploader("請點擊或拖曳上傳 PDF 檔案", type="pdf")
 
-# 專門對付考評局無格線表格的進階參數
 custom_table_settings = {
     "vertical_strategy": "text",
     "horizontal_strategy": "text",
@@ -20,8 +20,37 @@ custom_table_settings = {
     "min_words_vertical": 2
 }
 
+def clean_and_convert_to_numeric(val):
+    """將文字轉換為真實數字的智能函數"""
+    if pd.isna(val):
+        return val
+        
+    val_str = str(val).strip()
+    
+    # 移除千位數逗號
+    val_str = val_str.replace(',', '')
+    
+    # 如果是百分比 (例如 "85%")，去掉 % 並除以 100 變成 0.85
+    if val_str.endswith('%'):
+        try:
+            return float(val_str.replace('%', '')) / 100.0
+        except ValueError:
+            pass
+            
+    # 如果帶有加號 (例如 "+0.25")，去掉加號轉換為正數
+    if val_str.startswith('+'):
+        val_str = val_str[1:]
+        
+    # 嘗試轉換為浮點數或整數
+    try:
+        # 如果小數點後為 0，就轉為整數；否則轉浮點數
+        num = float(val_str)
+        return int(num) if num.is_integer() else num
+    except ValueError:
+        return val_str # 如果轉換失敗（例如是純文字的題號），就保留原樣
+
 if uploaded_file is not None:
-    with st.spinner("正在智能解析 PDF 並向右對齊數據，這可能需要幾秒鐘..."):
+    with st.spinner("正在智能解析 PDF 並轉換數字格式，這可能需要幾秒鐘..."):
         sections = {}
         current_section = "General"
 
@@ -31,15 +60,12 @@ if uploaded_file is not None:
                 if not text:
                     continue
                 
-                # 智能捕捉卷別
                 paper_match = re.search(r'(?:卷\s*)?Paper:\s*([A-Za-z0-9]+)', text)
                 if paper_match:
                     paper_name = paper_match.group(1).strip()
                     current_section = f"Paper_{paper_name}"
-                    
                     if current_section not in sections:
                         sections[current_section] = []
-                
                 elif "Mathematics" in text and current_section == "General":
                     current_section = "Math_Compulsory"
                 elif "English" in text and current_section == "General":
@@ -50,7 +76,6 @@ if uploaded_file is not None:
                 if current_section not in sections:
                     sections[current_section] = []
                     
-                # 提取表格
                 table = page.extract_table(custom_table_settings)
                 
                 if table:
@@ -66,44 +91,39 @@ if uploaded_file is not None:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             for section_name, data in sections.items():
                 if data:
-                    # 清洗空白行
                     clean_data = [row for row in data if any(cell.strip() for cell in row if isinstance(cell, str))]
                     if clean_data:
                         df = pd.DataFrame(clean_data)
                         
-                        # 1. 統一將空字串、None 替換為 pandas 的標準空值 (NaN)
+                        # 1. 統天空值處理
                         df.replace(r'^\s*$', pd.NA, regex=True, inplace=True)
-                        
-                        # 2. 刪除整欄都是空值的欄位（收緊表格）
                         df.dropna(how='all', axis=1, inplace=True)
                         
-                        # ======== 新增：核心「向右對齊」邏輯 ========
-                        # 建立一個函數，處理單一橫列：將所有 NaN 推到左邊，非 NaN 放到右邊
+                        # 2. 向右對齊邏輯
                         def shift_row_right(row):
-                            # 取出這行所有不是 NaN 的值
                             valid_values = row.dropna().tolist()
-                            # 計算需要補幾個 NaN 在最左邊
                             num_nans_to_add = len(row) - len(valid_values)
-                            # 組合：[NaN, NaN...] + [值1, 值2...]
                             shifted_values = [pd.NA] * num_nans_to_add + valid_values
                             return pd.Series(shifted_values, index=row.index)
                         
-                        # 將此邏輯套用到 DataFrame 的每一列 (axis=1)
                         df = df.apply(shift_row_right, axis=1)
-                        # =======================================
+                        
+                        # 3. 再次刪除因向右對齊而產生的左側「全空欄」
+                        df.dropna(how='all', axis=1, inplace=True)
+                        
+                        # 4. 套用數字轉換函數到整個 DataFrame 的每一個儲存格
+                        df = df.applymap(clean_and_convert_to_numeric)
                         
                         safe_sheet_name = re.sub(r'[\\/*?:\[\]]', '_', section_name)[:31]
-                        
-                        # 寫入 Excel (保留表頭，移除欄位索引)
                         df.to_excel(writer, sheet_name=safe_sheet_name, index=False, header=False)
                         has_data = True
 
         if has_data:
-            st.success("✅ 智能轉換成功！所有數據已自動向右對齊。請點擊下方按鈕下載 Excel。")
+            st.success("✅ 智能轉換成功！數據已對齊並轉為數字格式。請點擊下方按鈕下載 Excel。")
             st.download_button(
-                label="📥 下載向右對齊 Excel 檔案",
+                label="📥 下載最終版 Excel 檔案",
                 data=output.getvalue(),
-                file_name="DSE_Report_Right_Aligned.xlsx",
+                file_name="DSE_Report_Numeric.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         else:
