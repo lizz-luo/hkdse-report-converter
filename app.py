@@ -40,7 +40,15 @@ def extract_item_analysis(file_bytes):
         "標準差 S.D. (貴校)", "作答 Attempted % (日校)", "平均分 Mean (日校)", 
         "平均分 Mean % (日校)", "標準差 S.D. (日校)", "差距 Diff (b)-(c)", "差距 Diff %"
     ]
-    return pd.DataFrame(extracted_data, columns=columns)
+    df = pd.DataFrame(extracted_data, columns=columns)
+    
+    # 將項目分析的純數字欄位也轉換為數字格式 (遇到無法轉換的保持原樣)
+    numeric_cols = ["滿分 (Max Mark)", "人數 No.", "平均分 Mean (貴校)", "標準差 S.D. (貴校)", 
+                    "平均分 Mean (日校)", "標準差 S.D. (日校)", "差距 Diff (b)-(c)"]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors='ignore')
+        
+    return df
 
 # ==========================================
 # 核心處理函數 2：多項選擇題報告 (MCQ Analysis)
@@ -66,8 +74,9 @@ def extract_mcq_analysis(file_bytes):
                     if current_question and question_answers:
                         row = {'Question Number': current_question, 'Corr. Ans': correct_answer}
                         for opt in ['A', 'B', 'C', 'D']:
-                            row[f'Your school {opt}_No.'] = question_answers.get(f'{opt}_your', '')
-                            row[f'Day schools {opt}_No.'] = question_answers.get(f'{opt}_day', '')
+                            # 預設補 0 而非空字串，確保後續能轉為數字
+                            row[f'Your school {opt}_No.'] = question_answers.get(f'{opt}_your', '0')
+                            row[f'Day schools {opt}_No.'] = question_answers.get(f'{opt}_day', '0')
                         mcq_data.append(row)
                     
                     current_question = q_match.group(1)
@@ -90,8 +99,8 @@ def extract_mcq_analysis(file_bytes):
             if current_question and question_answers:
                 row = {'Question Number': current_question, 'Corr. Ans': correct_answer}
                 for opt in ['A', 'B', 'C', 'D']:
-                    row[f'Your school {opt}_No.'] = question_answers.get(f'{opt}_your', '')
-                    row[f'Day schools {opt}_No.'] = question_answers.get(f'{opt}_day', '')
+                    row[f'Your school {opt}_No.'] = question_answers.get(f'{opt}_your', '0')
+                    row[f'Day schools {opt}_No.'] = question_answers.get(f'{opt}_day', '0')
                 mcq_data.append(row)
 
     df = pd.DataFrame(mcq_data)
@@ -102,6 +111,11 @@ def extract_mcq_analysis(file_bytes):
             'Day schools A_No.', 'Day schools B_No.', 'Day schools C_No.', 'Day schools D_No.'
         ]
         df = df[column_order]
+        
+        # 【關鍵更新】將所有包含 "_No." 的欄位強制轉換為整數 (Integer)
+        for col in df.columns:
+            if '_No.' in col:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
     
     return df
 
@@ -162,6 +176,8 @@ with tab2:
                 st.warning("⚠️ 無法提取數據！請確認檔案是否為 MCQ 報告。")
             else:
                 st.success(f"✅ 成功提取 {len(df_mcq)} 題的數據！")
+                
+                # 讓 Streamlit 預覽表格也能正確顯示數字格式（靠右對齊）
                 st.dataframe(df_mcq, use_container_width=True)
                 
                 st.download_button(
