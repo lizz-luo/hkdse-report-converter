@@ -4,11 +4,10 @@ import pandas as pd
 import io
 import re
 import numpy as np
-from collections import defaultdict
 
-st.set_page_config(page_title="HKDSE v4.2", layout="wide")
+st.set_page_config(page_title="HKDSE 轉換工具", layout="wide")
 
-st.title("HKDSE 智能轉換 v4.2")
+st.title("HKDSE 轉換")
 
 uploaded_file = st.file_uploader("上傳 PDF", type="pdf")
 
@@ -21,11 +20,14 @@ def extract_smart_table(page):
     if not words:
         return []
     
-    rows_by_y = defaultdict(list)
+    rows_by_y = {}
     for word in words:
-        rows_by_y[round(word['top'], 1)].append(word)
+        y_pos = round(word['top'], 1)
+        if y_pos not in rows_by_y:
+            rows_by_y[y_pos] = []
+        rows_by_y[y_pos].append(word)
     
-    sorted_y = sorted(rows_by_y)
+    sorted_y = sorted(rows_by_y.keys())
     rows = []
     
     for y in sorted_y:
@@ -61,15 +63,23 @@ def extract_smart_table(page):
     
     return rows
 
-def align_and_clean(df):
-    df = df.loc[:, (df != '').any(axis=0)]
+def align_to_rightmost(df):
+    """**對齊到最右有數據欄**"""
+    # 找到全局最右有數據列
+    has_data = (df.astype(str).str.strip() != '').any(axis=0)
+    rightmost_cols = has_data[has_data].index.max()
     
-    def right_align(series):
+    # 統一欄寬到最右
+    df = df.reindex(columns=range(rightmost_cols + 1), fill_value='')
+    
+    # 每行右對齊
+    def right_align_row(series):
         valid = series[series.astype(str).str.strip() != ''].tolist()
-        n_empty = len(series) - len(valid)
-        return pd.Series([''] * n_empty + valid)
+        return pd.Series([''] * (len(series) - len(valid)) + valid)
     
-    df = df.apply(right_align, axis=1)
+    df = df.apply(right_align_row, axis=1)
+    
+    # 刪除最終左空欄
     df = df.loc[:, (df != '').any(axis=0)]
     
     return df
@@ -99,11 +109,8 @@ if uploaded_file:
                 all_rows.extend(table)
         
         df_raw = pd.DataFrame(all_rows)
-        df_aligned = align_and_clean(df_raw)
-        df_final = df_aligned.map(smart_numeric).fillna('')
-        
-        # 徹底清除 None
-        df_final = df_final.replace('None', '')
+        df_aligned = align_to_rightmost(df_raw)
+        df_final = df_aligned.map(smart_numeric).fillna('').replace('None', '')
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -117,8 +124,7 @@ if uploaded_file:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.download_button("下載 Excel", output.getvalue(), 
-                             "DSE_v4.2.xlsx")
+            st.download_button("下載 Excel", output.getvalue(), "DSE.xlsx")
         with col2:
             st.metric("行數", len(all_rows))
             st.metric("欄數", len(df_final.columns))
