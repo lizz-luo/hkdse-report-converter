@@ -6,26 +6,25 @@ import re
 import numpy as np
 from collections import defaultdict
 
-st.set_page_config(page_title="HKDSE v4.0", layout="wide")
+st.set_page_config(page_title="HKDSE v4.1", layout="wide")
 
-st.title("🧠 HKDSE **超智能分欄** v4.0")
+st.title("🎯 HKDSE **完整智能版** v4.1")
 st.markdown("""
-**解決所有空格問題！**
-- 📐 **動態間隙檢測**：自適應每個PDF
-- ✂️ **智能分詞**：「Que./ marking」→「Que./」|「marking」
-- 🔄 **多階段清理**：物理+語義結合
+**智能分詞 + 右對齊 + 刪空欄 全自動**
+- ✂️ 動態分詞（Que./ marking → Que./ | marking）
+- ➡️ **完美右對齊**
+- 🗑️ **自動刪左空欄**
 """)
 
 uploaded_file = st.file_uploader("上傳 PDF", type="pdf")
 
 def smart_split_text(text):
-    """智能分詞：斜線、特殊符號自動切分"""
-    # 常見分隔符優先切分
+    """智能分詞"""
     splits = re.split(r'[ /()#：:]+', text)
     return [s.strip() for s in splits if s.strip()]
 
-def extract_super_smart_table(page):
-    """v4.0 超智能提取"""
+def extract_smart_table(page):
+    """超智能提取"""
     words = page.extract_words(x_tolerance=1.5, y_tolerance=2.5)
     if not words:
         return []
@@ -42,10 +41,10 @@ def extract_super_smart_table(page):
         if len(row_words) < 2:
             continue
         
-        # 動態間隙閾值（該頁自適應）
-        x_positions = [w['x0'] for w in row_words]
-        gaps = [x_positions[i+1] - x_positions[i] for i in range(len(x_positions)-1)]
-        dynamic_gap = np.percentile(gaps, 75)  # 75%分位數作為閾值
+        # 動態間隙
+        x_pos = [w['x0'] for w in row_words]
+        gaps = [x_pos[i+1] - x_pos[i] for i in range(len(x_pos)-1)]
+        dyn_gap = np.percentile([g for g in gaps if g > 0], 70)
         
         cols = []
         current_col = []
@@ -53,12 +52,10 @@ def extract_super_smart_table(page):
         
         for word in row_words:
             gap = word['x0'] - prev_x1
-            if gap > dynamic_gap * 0.8:  # 動態閾值
+            if gap > dyn_gap * 0.7:
                 col_text = ' '.join(w['text'] for w in current_col).strip()
                 if col_text:
-                    # 智能二次分詞
-                    smart_cols = smart_split_text(col_text)
-                    cols.extend(smart_cols)
+                    cols.extend(smart_split_text(col_text))
                 current_col = [word]
             else:
                 current_col.append(word)
@@ -66,83 +63,94 @@ def extract_super_smart_table(page):
         
         col_text = ' '.join(w['text'] for w in current_col).strip()
         if col_text:
-            smart_cols = smart_split_text(col_text)
-            cols.extend(smart_cols)
+            cols.extend(smart_split_text(col_text))
         
         if len(cols) >= 4:
-            rows.append(cols[:25])  # 最多25欄
+            rows.append([c if c else '' for c in cols[:25]])
     
     return rows
 
-def ultra_clean(df):
-    """超級清理"""
-    # 移除空欄
-    df = df.loc[:, (df != '').any()]
+def perfect_alignment(df):
+    """**完美對齊流程**"""
+    # 1. 刪除完全空欄
+    df = df.loc[:, (df != '').any(axis=0)]
     
-    # 右對齊
-    def align_right(series):
+    # 2. 右對齊（保留有效數據）
+    def right_align(series):
         valid = series[series.astype(str).str.strip() != ''].tolist()
-        return pd.Series([''] * (len(series) - len(valid)) + valid)
+        n_empty = len(series) - len(valid)
+        return pd.Series([''] * n_empty + valid)
     
-    df = df.apply(align_right, axis=1)
+    df = df.apply(right_align, axis=1)
     
-    # 智能數字
-    def to_num(val):
-        s = str(val).strip()
-        if s.endswith('%'):
-            try:
-                return float(s[:-1]) / 100
-            except:
-                pass
-        try:
-            return pd.to_numeric(s.replace(',', ''), errors='coerce')
-        except:
-            return s
-    
-    df = df.map(to_num)
-    df = df.fillna('').replace(np.nan, '')
+    # 3. 再次刪除**新增的左空欄**
+    df = df.loc[:, (df != '').any(axis=0)]
     
     return df
 
+def smart_numeric(val):
+    s = str(val).strip()
+    if s.endswith('%'):
+        try:
+            return float(s[:-1]) / 100
+        except:
+            pass
+    try:
+        num = float(s.replace(',', ''))
+        return int(num) if num.is_integer() else num
+    except:
+        return s
+
 if uploaded_file:
     try:
-        st.info("🧠 超智能解析...")
+        st.info("🎯 智能解析 + 完美對齊...")
         all_rows = []
         
         with pdfplumber.open(uploaded_file) as pdf:
             for page in pdf.pages:
-                table = extract_super_smart_table(page)
+                table = extract_smart_table(page)
                 all_rows.extend(table)
         
-        df = ultra_clean(pd.DataFrame(all_rows))
+        # **核心三步：分詞 → 右對齊 → 刪空欄**
+        df_raw = pd.DataFrame(all_rows)
+        df_aligned = perfect_alignment(df_raw)
+        df_final = df_aligned.map(smart_numeric).fillna('')
         
+        # 輸出
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, '智能解析', index=False, header=False)
+            df_final.to_excel(writer, '完美對齊', index=False, header=False)
             
             stats = pd.DataFrame([{
-                '行數': len(all_rows),
-                '欄數': len(df.columns),
-                '狀態': '超智能成功'
+                '原始行': len(all_rows),
+                '最終欄': len(df_final.columns),
+                '有效數據': (df_final != '').sum().sum(),
+                '狀態': '完美對齊完成'
             }])
             stats.to_excel(writer, '統計', index=False)
         
-        st.success("✅ **超智能轉換完成！**")
-        col1, col2 = st.columns([3,1])
+        st.success("✅ **完美對齊完成！**")
+        
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.download_button("📥 下載 v4.0", output.getvalue(), 
-                             f"DSE_v4.0.xlsx", 
-                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button("📥 下載 v4.1", output.getvalue(), 
+                             "DSE_v4.1_Perfect.xlsx")
         with col2:
             st.metric("解析行數", len(all_rows))
+        with col3:
+            st.metric("最終欄數", len(df_final.columns))
         
-        st.subheader("🎯 智能預覽")
-        st.dataframe(df.head(15), height=400)
-        
+        # **對比展示**
+        st.subheader("📊 對齊前後對比")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.write("**右對齊前**")
+            st.dataframe(df_raw.head(8), height=300)
+        with col_b:
+            st.write("**完美對齊後**")
+            st.dataframe(df_final.head(8), height=300)
+            
     except Exception as e:
         st.error(f"錯誤：{e}")
-        st.info("顯示原始文字...")
-        with pdfplumber.open(uploaded_file) as pdf:
-            st.text(pdf.pages[0].extract_text()[:2000])
 
-st.caption("**v4.0 超智能** | 動態間隙 + 分詞 | 全科完美")
+st.caption("**v4.1 | 智能分詞 + 完美對齊流程**")
