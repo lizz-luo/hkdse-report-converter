@@ -64,28 +64,33 @@ def extract_smart_table(page):
     return rows
 
 def align_to_rightmost(df):
-    """對齊到最右有數據欄（N欄）"""
-    # 找到全局最大欄數（最寬行）
-    max_cols = df.apply(lambda row: (row.astype(str).str.strip() != '').sum(), axis=1).max()
-    
-    # 統一所有行到最大欄數
-    df = df.reindex(columns=range(max_cols), fill_value='')
-    
-    # 每行右對齊到最右欄
-    def right_align_to_max(series):
-        series_str = series.astype(str)
-        valid_mask = series_str.str.strip() != ''
-        valid = series[valid_mask].tolist()
-        n_empty = len(series) - len(valid)
-        return pd.Series([''] * n_empty + valid, index=series.index)
-    
-    df = df.apply(right_align_to_max, axis=1)
-    
-    # 刪除完全空的左欄
+    """強制對齊到N欄（最右數據欄）"""
+    # 找每行實際數據數
     df_str = df.astype(str)
-    df = df.loc[:, (df_str != '').any(axis=0)]
+    row_data_counts = df_str.apply(lambda row: (row.str.strip() != '').sum(), axis=1)
+    max_data_cols = row_data_counts.max()
     
-    return df
+    # 統一所有行到最大數據欄數
+    target_cols = max_data_cols
+    
+    # 逐行右對齊到N欄
+    aligned_rows = []
+    for _, row in df.iterrows():
+        row_str = row.astype(str)
+        valid_data = row[row_str.str.strip() != ''].tolist()
+        num_valid = len(valid_data)
+        
+        # 左填空格，右填數據到N欄
+        new_row = [''] * (target_cols - num_valid) + valid_data
+        aligned_rows.append(new_row)
+    
+    df_aligned = pd.DataFrame(aligned_rows)
+    
+    # 刪除左側全空欄
+    df_str = df_aligned.astype(str)
+    df_aligned = df_aligned.loc[:, (df_str != '').any(axis=0)]
+    
+    return df_aligned
 
 def smart_numeric(val):
     s = str(val).strip()
