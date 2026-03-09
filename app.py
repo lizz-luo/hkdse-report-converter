@@ -64,23 +64,30 @@ def extract_smart_table(page):
     return rows
 
 def align_to_rightmost(df):
-    """**對齊到最右有數據欄**"""
-    # 找到全局最右有數據列
-    has_data = (df.astype(str).str.strip() != '').any(axis=0)
-    rightmost_cols = has_data[has_data].index.max()
+    """對齊到最右有數據欄"""
+    # 轉string避免str錯誤
+    df_str = df.astype(str)
     
-    # 統一欄寬到最右
-    df = df.reindex(columns=range(rightmost_cols + 1), fill_value='')
+    # 找到最右有數據列
+    has_data_cols = (df_str != '').any(axis=0)
+    rightmost_col = has_data_cols[has_data_cols].index.max()
     
-    # 每行右對齊
+    # 統一寬度
+    df = df.reindex(columns=range(rightmost_col + 1), fill_value='')
+    
+    # 右對齊
     def right_align_row(series):
-        valid = series[series.astype(str).str.strip() != ''].tolist()
-        return pd.Series([''] * (len(series) - len(valid)) + valid)
+        series_str = series.astype(str)
+        valid_mask = series_str.str.strip() != ''
+        valid = series[valid_mask].tolist()
+        n_empty = len(series) - len(valid)
+        return pd.Series([''] * n_empty + valid)
     
     df = df.apply(right_align_row, axis=1)
     
-    # 刪除最終左空欄
-    df = df.loc[:, (df != '').any(axis=0)]
+    # 刪左空欄
+    df_str = df.astype(str)
+    df = df.loc[:, (df_str != '').any(axis=0)]
     
     return df
 
