@@ -6,9 +6,9 @@ import re
 import numpy as np
 from collections import defaultdict
 
-st.set_page_config(page_title="HKDSE v4.3", layout="wide")
+st.set_page_config(page_title="HKDSE v4.2", layout="wide")
 
-st.title("HKDSE 轉換 v4.3")
+st.title("HKDSE 智能轉換 v4.2")
 
 uploaded_file = st.file_uploader("上傳 PDF", type="pdf")
 
@@ -61,24 +61,15 @@ def extract_smart_table(page):
     
     return rows
 
-def final_right_align(df):
-    """**最終右對齊到最右有數據欄**"""
-    # 找到每行最右有數據位置
-    df_str = df.astype(str)
-    rightmost_col = df_str.apply(lambda row: row.str.strip() != '').sum(axis=1).idxmax()
-    max_right_col = rightmost_col if isinstance(rightmost_col, int) else df.shape[1] - 1
+def align_and_clean(df):
+    df = df.loc[:, (df != '').any(axis=0)]
     
-    # 統一到最右欄寬
-    df = df.reindex(columns=range(max_right_col + 1), fill_value='')
-    
-    # 每行右對齊到最右
-    def align_to_right(series):
+    def right_align(series):
         valid = series[series.astype(str).str.strip() != ''].tolist()
-        return pd.Series([''] * (len(series) - len(valid)) + valid)
+        n_empty = len(series) - len(valid)
+        return pd.Series([''] * n_empty + valid)
     
-    df = df.apply(align_to_right, axis=1)
-    
-    # 刪除左全空欄
+    df = df.apply(right_align, axis=1)
     df = df.loc[:, (df != '').any(axis=0)]
     
     return df
@@ -108,8 +99,11 @@ if uploaded_file:
                 all_rows.extend(table)
         
         df_raw = pd.DataFrame(all_rows)
-        df_aligned = final_right_align(df_raw)
-        df_final = df_aligned.map(smart_numeric).fillna('').replace('None', '')
+        df_aligned = align_and_clean(df_raw)
+        df_final = df_aligned.map(smart_numeric).fillna('')
+        
+        # 徹底清除 None
+        df_final = df_final.replace('None', '')
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -123,7 +117,8 @@ if uploaded_file:
         
         col1, col2 = st.columns(2)
         with col1:
-            st.download_button("下載 Excel", output.getvalue(), "DSE_v4.3.xlsx")
+            st.download_button("下載 Excel", output.getvalue(), 
+                             "DSE_v4.2.xlsx")
         with col2:
             st.metric("行數", len(all_rows))
             st.metric("欄數", len(df_final.columns))
