@@ -176,6 +176,9 @@ if uploaded_file is not None:
                 # 將每個儲存格嘗試轉成數字
                 df = df.applymap(clean_and_convert_to_numeric)
 
+		# 【新增】：把 NA 變成乾淨的空字串（或 "--"）
+		df = df.fillna('')  # 空字串，或者 df.fillna('--') 用 "--"
+
                 safe_sheet_name = re.sub(r"[\\/*?:\[\]]", "_", section_name)[:31]
                 df.to_excel(writer, sheet_name=safe_sheet_name, index=False, header=False)
                 has_data = True
