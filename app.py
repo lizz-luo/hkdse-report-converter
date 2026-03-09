@@ -1,266 +1,87 @@
 import streamlit as st
 import pdfplumber
 import pandas as pd
-import io
 import re
-import numpy as np
+import io
 
-st.set_page_config(page_title="HKDSE 全科轉換工具 v2.2", layout="centered")
+# 設定網頁標題與排版
+st.set_page_config(page_title="DSE 報告轉換器", page_icon="📊", layout="wide")
 
-st.title("📊 HKDSE 項目分析報告 → Excel v2.2")
-st.markdown("""
-✅ **全科支援**：
-- 🗺️ 地理：百分號拆分（53% → 53 + %）
-- 🇬🇧 英文：人數黏連（106 100.0 → 10；6 1000）  
-- ➗ 數學：跨行黏連（135 \\n100.0）
-- ✨ **新增**：最終空格強制拆分 + 所有數據向最右 N 欄對齊
-""")
+st.title("📊 DSE 項目分析報告 PDF 轉 Excel 工具")
+st.markdown("請上傳考評局的 DSE 數學科項目分析報告 (PDF)，系統會自動提取表格並轉換為 Excel 格式。")
 
-uploaded_file = st.file_uploader("請上傳 PDF 檔案", type="pdf")
+# 定義核心提取函數，並加入快取避免重複運算
+@st.cache_data
+def extract_dse_data(file_bytes):
+    # DSE 數據行的正則表達式
+    row_pattern = re.compile(
+        r'^(\d+)\s+([Q\d\w\(\)]+)\s+(.+?)\s+([+-]?\d+%)\s+([+-]?\d+\.\d+)\s+(\d+\.\d+)\s+(\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+%)\s+(\d+%)\s+(\d+\.\d+)\s+(\d+\.\d+)$'
+    )
 
-def merge_percentage_split(row):
-    """地理科：數字+% → 53%"""
-    new_row = list(row)
-    i = 0
-    while i < len(new_row) - 1:
-        cell1 = str(new_row[i]).strip()
-        cell2 = str(new_row[i+1]).strip()
-        if (re.match(r'^\d+\.?\d*$', cell1) and cell2 == '%'):
-            new_row[i] = cell1 + '%'
-            new_row[i+1] = ''
-        i += 1
-    return new_row
-
-def fix_stuck_numbers_and_percent(row):
-    """通用黏連修復（英文/數學強化）"""
-    new_row = list(row)
-    i = 0
-    while i < len(new_row) - 1:
-        cell1 = str(new_row[i]).strip()
-        cell2 = str(new_row[i+1]).strip()
-        
-        # 模式1：數字空格數字
-        combined = cell1 + ' ' + cell2
-        if re.match(r'^\d+\s+\d+\.?\d*$', combined):
-            parts = re.split(r'\s+', combined)
-            if len(parts) == 2:
-                new_row[i] = parts[0]
-                new_row[i+1] = parts[1]
-                i += 1
+    extracted_data = []
+    
+    # 使用 pdfplumber 讀取上傳的二進制檔案
+    with pdfplumber.open(file_bytes) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if not text:
                 continue
-        
-        # 模式2：純數字黏連
-        if (re.match(r'^\d{3,}$', cell1) and 
-            re.match(r'^\d+\.?\d*$', cell2)):
-            new_row[i] = cell1
-            new_row[i+1] = cell2
-        
-        i += 1
-    return new_row
+                
+            for line in text.split('\n'):
+                clean_line = " ".join(line.split())
+                match = row_pattern.search(clean_line)
+                
+                if match:
+                    extracted_data.append(match.groups())
 
-def fix_math_crossline_stuck(row):
-    """數學專用：135 \n100.0 → 135 + 100.0"""
-    new_row = list(row)
-    i = 0
-    while i < len(new_row):
-        cell = str(new_row[i]).strip()
-        if '\n' in cell and re.search(r'\d+\.?\d*\n\d+\.?\d*', cell):
-            parts = re.split(r'\n+', cell)
-            if len(parts) >= 2:
-                new_row[i] = parts[0].strip()
-                if i+1 < len(new_row):
-                    new_row[i+1] = parts[1].strip()
-        i += 1
-    return new_row
+    columns = [
+        "滿分 (Max Mark)", "項目 (Item)", "試題/評卷編號 (Ref)", 
+        "差距 Diff %", "差距 Diff (b)-(c)", "標準差 S.D. (貴校)", 
+        "人數 No.", "作答 Attempted % (貴校)", "作答 Attempted % (日校)", 
+        "平均分 Mean % (c)/(a)", "百分率 % (貴校)", "百分率 % (日校)", 
+        "平均分 Mean (貴校)", "平均分 Mean (日校)"
+    ]
 
-def clean_and_convert_to_numeric(val):
-    """智能數字轉換"""
-    if pd.isna(val) or val is None:
-        return ''
-    val_str = str(val).strip()
-    if not val_str or val_str == '' or val_str == 'None' or val_str == 'nan':
-        return ''
-    
-    if val_str.endswith('%'):
-        try:
-            return float(val_str.replace('%', '')) / 100.0
-        except:
-            pass
-    
-    val_str = val_str.replace(',', '')
-    if val_str.startswith('+'):
-        val_str = val_str[1:]
-    
-    try:
-        num = float(val_str)
-        return int(num) if num.is_integer() else num
-    except ValueError:
-        return val_str
+    return pd.DataFrame(extracted_data, columns=columns)
 
-def fix_row_split_numbers(cells):
-    """106 → 10+6 合併"""
-    cells = [("" if c is None or pd.isna(c) else str(c)) for c in cells]
-    for i in range(len(cells) - 2):
-        a, b, c = cells[i], cells[i + 1], cells[i + 2]
-        if a and b and c and a.isdigit() and b.isdigit() and len(a)==2 and len(b)==1:
-            c_clean = c.replace(',', '')
-            if c_clean.startswith("100"):
-                cells[i] = a + b
-                cells[i + 1] = ""
-                break
-    return cells
+# 將 DataFrame 轉換為 Excel 的二進制流，供下載使用
+def convert_df_to_excel(df):
+    output = io.BytesIO()
+    # 使用 openpyxl 引擎寫入內存
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='DSE Data')
+    processed_data = output.getvalue()
+    return processed_data
 
-# ================= 新增：最終分割與對齊函數 =================
-def final_space_split_and_align(df):
-    """將所有儲存格按空格再次分割，並向最右側 N 欄強制對齊"""
-    split_rows = []
-    
-    # 步驟 1：遍歷並按空格分割
-    for _, row in df.iterrows():
-        new_row = []
-        for cell in row:
-            if pd.isna(cell) or cell is None:
-                continue
-            cell_str = str(cell).strip()
-            if cell_str and ' ' in cell_str:
-                # 遇到空格就拆開（如 "Mean %" -> "Mean", "%"）
-                parts = cell_str.split()
-                new_row.extend(parts)
-            elif cell_str:
-                new_row.append(cell_str)
-        split_rows.append(new_row)
-        
-    # 步驟 2：找到最長行的欄數 (N 欄)
-    if not split_rows:
-        return df
-    max_cols = max(len(r) for r in split_rows)
-    
-    # 步驟 3：強制向最右側對齊
-    aligned_rows = []
-    for row in split_rows:
-        # 左邊補空白，右邊放數據
-        num_valid = len(row)
-        aligned_row = [''] * (max_cols - num_valid) + row
-        aligned_rows.append(aligned_row)
-        
-    return pd.DataFrame(aligned_rows)
-# ============================================================
+# 建立上傳區塊
+uploaded_file = st.file_uploader("拖曳或選擇 PDF 檔案", type=["pdf"])
 
 if uploaded_file is not None:
-    with st.spinner("🔄 智能解析中（全科修復）..."):
-        sections = {}
-        current_section = "General"
-        detected_subject = "General"
-
-        with pdfplumber.open(uploaded_file) as pdf:
-            for page in pdf.pages:
-                text = page.extract_text()
-                if not text: continue
-
-                # 科目自動識別
-                if "Geography" in text or "地理" in text:
-                    detected_subject = "Geography"
-                elif "English Language" in text or "英國語文" in text:
-                    detected_subject = "English"
-                elif "Mathematics" in text or "數學" in text:
-                    detected_subject = "Math"
-                elif "Chinese Language" in text or "中國語文" in text:
-                    detected_subject = "Chinese"
-
-                # 卷別
-                paper_match = re.search(r"(?:卷\s*)?Paper:\s*([A-Za-z0-9]+)", text)
-                if paper_match:
-                    paper_name = paper_match.group(1).strip()
-                    current_section = f"Paper_{paper_name}"
-                else:
-                    if current_section == "General" and detected_subject != "General":
-                        current_section = f"{detected_subject}_General"
-
-                if current_section not in sections:
-                    sections[current_section] = []
-
-                # 動態 X 容錯
-                x_tolerance = {
-                    "Geography": 1.2, "English": 1.5, "Math": 1.0
-                }.get(detected_subject, 3.0)
-
-                table_settings = {
-                    "vertical_strategy": "text",
-                    "horizontal_strategy": "text",
-                    "intersection_x_tolerance": x_tolerance,
-                    "intersection_y_tolerance": 2,
-                    "min_words_vertical": 2,
-                }
-
-                table = page.extract_table(table_settings)
-                if table:
-                    sections[current_section].extend(table)
-
-        # 生成 Excel
-        output = io.BytesIO()
-        has_data = False
-
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            for section_name, data in sections.items():
-                if not data: continue
-
-                cleaned_rows = [row for row in data 
-                              if any((isinstance(c, str) and c.strip()) for c in row)]
-
-                if not cleaned_rows: continue
-
-                df = pd.DataFrame(cleaned_rows)
-                df = df.replace(r"^\s*$", np.nan, regex=True)
-                df.dropna(how='all', axis=1, inplace=True)
-
-                # 科目專屬修復
-                if detected_subject == "Geography":
-                    df = df.apply(merge_percentage_split, axis=1, result_type="expand")
-                df = df.apply(fix_stuck_numbers_and_percent, axis=1, result_type="expand")
-                if detected_subject == "Math":
-                    df = df.apply(fix_math_crossline_stuck, axis=1, result_type="expand")
-
-                # 標準流程
-                df = df.apply(lambda row: fix_row_split_numbers(list(row)), 
-                            axis=1, result_type="expand")
-                df = df.replace(r"^\s*$", np.nan, regex=True)
-
-                def shift_row_right(row):
-                    valid_vals = [v for v in row if pd.notna(v) and str(v).strip()]
-                    num_nans = len(row) - len(valid_vals)
-                    return pd.Series([np.nan] * num_nans + valid_vals, index=row.index)
-
-                df = df.apply(shift_row_right, axis=1)
-                df.dropna(how='all', axis=1, inplace=True)
-                
-                # ================= 核心修改位置 =================
-                # 在數字轉換之前，加入最終的空格分割與強制 N 欄對齊
-                df = final_space_split_and_align(df)
-                
-                # 映射數字並清理
-                try:
-                    df = df.map(clean_and_convert_to_numeric) # 兼容新版 Pandas
-                except AttributeError:
-                    df = df.applymap(clean_and_convert_to_numeric) # 兼容舊版 Pandas
-                # ================================================
-
-                # 徹底無 NA
-                df = df.replace([np.nan, pd.NA, None], '')
-                df = df.replace('<NA>', '')
-
-                safe_name = re.sub(r"[\\/*?:\[\]]", "_", section_name)[:31]
-                df.to_excel(writer, sheet_name=safe_name, index=False, header=False)
-                has_data = True
-
-        if has_data:
-            st.success(f"轉換完成！偵測科目：{detected_subject}")
+    st.info("檔案讀取中，請稍候...")
+    
+    try:
+        # 執行數據提取
+        df = extract_dse_data(uploaded_file)
+        
+        if df.empty:
+            st.warning("⚠️ 無法從此 PDF 中提取到符合格式的數據，請確認檔案是否為標準的 DSE 項目分析報告。")
+        else:
+            st.success(f"✅ 成功提取 {len(df)} 筆數據！")
+            
+            # 顯示數據預覽
+            st.subheader("數據預覽")
+            st.dataframe(df, use_container_width=True)
+            
+            # 準備下載按鈕
+            excel_data = convert_df_to_excel(df)
+            
             st.download_button(
                 label="📥 下載 Excel 檔案",
-                data=output.getvalue(),
-                file_name=f"DSE_Report_v2.2_{detected_subject}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                data=excel_data,
+                file_name=f"{uploaded_file.name.replace('.pdf', '')}_解析結果.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
             )
-        else:
-            st.error("未找到有效表格，請確認 PDF 格式")
-
-st.caption("v2.2 | 全科支援 | 最終空格拆分 + 強制右對齊")
+            
+    except Exception as e:
+        st.error(f"❌ 處理檔案時發生錯誤：{str(e)}")
