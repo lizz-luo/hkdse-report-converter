@@ -5,143 +5,262 @@ import io
 import re
 import numpy as np
 
-st.set_page_config(page_title="HKDSE 轉換工具", layout="wide")
+st.set_page_config(page_title="HKDSE 全科轉換工具 v2.2", layout="centered")
 
-st.title("HKDSE 轉換")
+st.title("📊 HKDSE 項目分析報告 → Excel v2.2")
+st.markdown("""
+✅ **全科支援**：
+- 🗺️ 地理：百分號拆分（53% → 53 + %）
+- 🇬🇧 英文：人數黏連（106 100.0 → 10；6 1000）  
+- ➗ 數學：跨行黏連（135 \\n100.0）
+- ✨ **新增**：最終空格強制拆分 + 所有數據向最右 N 欄對齊
+""")
 
-uploaded_file = st.file_uploader("上傳 PDF", type="pdf")
+uploaded_file = st.file_uploader("請上傳 PDF 檔案", type="pdf")
 
-def smart_split_text(text):
-    splits = re.split(r'[ /()#：:]+', text)
-    return [s.strip() for s in splits if s.strip()]
+def merge_percentage_split(row):
+    """地理科：數字+% → 53%"""
+    new_row = list(row)
+    i = 0
+    while i < len(new_row) - 1:
+        cell1 = str(new_row[i]).strip()
+        cell2 = str(new_row[i+1]).strip()
+        if (re.match(r'^\d+\.?\d*$', cell1) and cell2 == '%'):
+            new_row[i] = cell1 + '%'
+            new_row[i+1] = ''
+        i += 1
+    return new_row
 
-def extract_smart_table(page):
-    words = page.extract_words(x_tolerance=1.5, y_tolerance=2.5)
-    if not words:
-        return []
-    
-    rows_by_y = {}
-    for word in words:
-        y_pos = round(word['top'], 1)
-        if y_pos not in rows_by_y:
-            rows_by_y[y_pos] = []
-        rows_by_y[y_pos].append(word)
-    
-    sorted_y = sorted(rows_by_y.keys())
-    rows = []
-    
-    for y in sorted_y:
-        row_words = sorted(rows_by_y[y], key=lambda w: w['x0'])
-        if len(row_words) < 2:
-            continue
+def fix_stuck_numbers_and_percent(row):
+    """通用黏連修復（英文/數學強化）"""
+    new_row = list(row)
+    i = 0
+    while i < len(new_row) - 1:
+        cell1 = str(new_row[i]).strip()
+        cell2 = str(new_row[i+1]).strip()
         
-        x_pos = [w['x0'] for w in row_words]
-        gaps = [x_pos[i+1] - x_pos[i] for i in range(len(x_pos)-1)]
-        dyn_gap = np.percentile([g for g in gaps if g > 0], 70)
+        # 模式1：數字空格數字
+        combined = cell1 + ' ' + cell2
+        if re.match(r'^\d+\s+\d+\.?\d*$', combined):
+            parts = re.split(r'\s+', combined)
+            if len(parts) == 2:
+                new_row[i] = parts[0]
+                new_row[i+1] = parts[1]
+                i += 1
+                continue
         
-        cols = []
-        current_col = []
-        prev_x1 = row_words[0]['x0']
+        # 模式2：純數字黏連
+        if (re.match(r'^\d{3,}$', cell1) and 
+            re.match(r'^\d+\.?\d*$', cell2)):
+            new_row[i] = cell1
+            new_row[i+1] = cell2
         
-        for word in row_words:
-            gap = word['x0'] - prev_x1
-            if gap > dyn_gap * 0.7:
-                col_text = ' '.join(w['text'] for w in current_col).strip()
-                if col_text:
-                    cols.extend(smart_split_text(col_text))
-                current_col = [word]
-            else:
-                current_col.append(word)
-            prev_x1 = word['x1']
-        
-        col_text = ' '.join(w['text'] for w in current_col).strip()
-        if col_text:
-            cols.extend(smart_split_text(col_text))
-        
-        if len(cols) >= 4:
-            rows.append([c if c else '' for c in cols[:25]])
-    
-    return rows
+        i += 1
+    return new_row
 
-def align_to_rightmost(df):
-    """強制對齊到N欄（最右數據欄）"""
-    # 找每行實際數據數
-    df_str = df.astype(str)
-    row_data_counts = df_str.apply(lambda row: (row.str.strip() != '').sum(), axis=1)
-    max_data_cols = row_data_counts.max()
-    
-    # 統一所有行到最大數據欄數
-    target_cols = max_data_cols
-    
-    # 逐行右對齊到N欄
-    aligned_rows = []
-    for _, row in df.iterrows():
-        row_str = row.astype(str)
-        valid_data = row[row_str.str.strip() != ''].tolist()
-        num_valid = len(valid_data)
-        
-        # 左填空格，右填數據到N欄
-        new_row = [''] * (target_cols - num_valid) + valid_data
-        aligned_rows.append(new_row)
-    
-    df_aligned = pd.DataFrame(aligned_rows)
-    
-    # 刪除左側全空欄
-    df_str = df_aligned.astype(str)
-    df_aligned = df_aligned.loc[:, (df_str != '').any(axis=0)]
-    
-    return df_aligned
+def fix_math_crossline_stuck(row):
+    """數學專用：135 \n100.0 → 135 + 100.0"""
+    new_row = list(row)
+    i = 0
+    while i < len(new_row):
+        cell = str(new_row[i]).strip()
+        if '\n' in cell and re.search(r'\d+\.?\d*\n\d+\.?\d*', cell):
+            parts = re.split(r'\n+', cell)
+            if len(parts) >= 2:
+                new_row[i] = parts[0].strip()
+                if i+1 < len(new_row):
+                    new_row[i+1] = parts[1].strip()
+        i += 1
+    return new_row
 
-def smart_numeric(val):
-    s = str(val).strip()
-    if s == 'None' or s == 'nan' or pd.isna(val):
+def clean_and_convert_to_numeric(val):
+    """智能數字轉換"""
+    if pd.isna(val) or val is None:
         return ''
-    if s.endswith('%'):
+    val_str = str(val).strip()
+    if not val_str or val_str == '' or val_str == 'None' or val_str == 'nan':
+        return ''
+    
+    if val_str.endswith('%'):
         try:
-            return float(s[:-1]) / 100
+            return float(val_str.replace('%', '')) / 100.0
         except:
             pass
+    
+    val_str = val_str.replace(',', '')
+    if val_str.startswith('+'):
+        val_str = val_str[1:]
+    
     try:
-        num = float(s.replace(',', ''))
+        num = float(val_str)
         return int(num) if num.is_integer() else num
-    except:
-        return s
+    except ValueError:
+        return val_str
 
-if uploaded_file:
-    try:
-        all_rows = []
+def fix_row_split_numbers(cells):
+    """106 → 10+6 合併"""
+    cells = [("" if c is None or pd.isna(c) else str(c)) for c in cells]
+    for i in range(len(cells) - 2):
+        a, b, c = cells[i], cells[i + 1], cells[i + 2]
+        if a and b and c and a.isdigit() and b.isdigit() and len(a)==2 and len(b)==1:
+            c_clean = c.replace(',', '')
+            if c_clean.startswith("100"):
+                cells[i] = a + b
+                cells[i + 1] = ""
+                break
+    return cells
+
+# ================= 新增：最終分割與對齊函數 =================
+def final_space_split_and_align(df):
+    """將所有儲存格按空格再次分割，並向最右側 N 欄強制對齊"""
+    split_rows = []
+    
+    # 步驟 1：遍歷並按空格分割
+    for _, row in df.iterrows():
+        new_row = []
+        for cell in row:
+            if pd.isna(cell) or cell is None:
+                continue
+            cell_str = str(cell).strip()
+            if cell_str and ' ' in cell_str:
+                # 遇到空格就拆開（如 "Mean %" -> "Mean", "%"）
+                parts = cell_str.split()
+                new_row.extend(parts)
+            elif cell_str:
+                new_row.append(cell_str)
+        split_rows.append(new_row)
         
+    # 步驟 2：找到最長行的欄數 (N 欄)
+    if not split_rows:
+        return df
+    max_cols = max(len(r) for r in split_rows)
+    
+    # 步驟 3：強制向最右側對齊
+    aligned_rows = []
+    for row in split_rows:
+        # 左邊補空白，右邊放數據
+        num_valid = len(row)
+        aligned_row = [''] * (max_cols - num_valid) + row
+        aligned_rows.append(aligned_row)
+        
+    return pd.DataFrame(aligned_rows)
+# ============================================================
+
+if uploaded_file is not None:
+    with st.spinner("🔄 智能解析中（全科修復）..."):
+        sections = {}
+        current_section = "General"
+        detected_subject = "General"
+
         with pdfplumber.open(uploaded_file) as pdf:
             for page in pdf.pages:
-                table = extract_smart_table(page)
-                all_rows.extend(table)
-        
-        df_raw = pd.DataFrame(all_rows)
-        df_aligned = align_to_rightmost(df_raw)
-        df_final = df_aligned.map(smart_numeric).fillna('').replace('None', '')
-        
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_final.to_excel(writer, 'Data', index=False, header=False)
-            
-            stats = pd.DataFrame([{
-                '行數': len(all_rows),
-                '欄數': len(df_final.columns)
-            }])
-            stats.to_excel(writer, 'Stats', index=False)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button("下載 Excel", output.getvalue(), "DSE.xlsx")
-        with col2:
-            st.metric("行數", len(all_rows))
-            st.metric("欄數", len(df_final.columns))
-        
-        st.subheader("數據預覽")
-        st.dataframe(df_final.head(15), height=400)
-        
-    except Exception as e:
-        st.error(f"錯誤：{e}")
+                text = page.extract_text()
+                if not text: continue
 
-if not uploaded_file:
-    st.info("請上傳 PDF")
+                # 科目自動識別
+                if "Geography" in text or "地理" in text:
+                    detected_subject = "Geography"
+                elif "English Language" in text or "英國語文" in text:
+                    detected_subject = "English"
+                elif "Mathematics" in text or "數學" in text:
+                    detected_subject = "Math"
+                elif "Chinese Language" in text or "中國語文" in text:
+                    detected_subject = "Chinese"
+
+                # 卷別
+                paper_match = re.search(r"(?:卷\s*)?Paper:\s*([A-Za-z0-9]+)", text)
+                if paper_match:
+                    paper_name = paper_match.group(1).strip()
+                    current_section = f"Paper_{paper_name}"
+                else:
+                    if current_section == "General" and detected_subject != "General":
+                        current_section = f"{detected_subject}_General"
+
+                if current_section not in sections:
+                    sections[current_section] = []
+
+                # 動態 X 容錯
+                x_tolerance = {
+                    "Geography": 1.2, "English": 1.5, "Math": 1.0
+                }.get(detected_subject, 3.0)
+
+                table_settings = {
+                    "vertical_strategy": "text",
+                    "horizontal_strategy": "text",
+                    "intersection_x_tolerance": x_tolerance,
+                    "intersection_y_tolerance": 2,
+                    "min_words_vertical": 2,
+                }
+
+                table = page.extract_table(table_settings)
+                if table:
+                    sections[current_section].extend(table)
+
+        # 生成 Excel
+        output = io.BytesIO()
+        has_data = False
+
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            for section_name, data in sections.items():
+                if not data: continue
+
+                cleaned_rows = [row for row in data 
+                              if any((isinstance(c, str) and c.strip()) for c in row)]
+
+                if not cleaned_rows: continue
+
+                df = pd.DataFrame(cleaned_rows)
+                df = df.replace(r"^\s*$", np.nan, regex=True)
+                df.dropna(how='all', axis=1, inplace=True)
+
+                # 科目專屬修復
+                if detected_subject == "Geography":
+                    df = df.apply(merge_percentage_split, axis=1, result_type="expand")
+                df = df.apply(fix_stuck_numbers_and_percent, axis=1, result_type="expand")
+                if detected_subject == "Math":
+                    df = df.apply(fix_math_crossline_stuck, axis=1, result_type="expand")
+
+                # 標準流程
+                df = df.apply(lambda row: fix_row_split_numbers(list(row)), 
+                            axis=1, result_type="expand")
+                df = df.replace(r"^\s*$", np.nan, regex=True)
+
+                def shift_row_right(row):
+                    valid_vals = [v for v in row if pd.notna(v) and str(v).strip()]
+                    num_nans = len(row) - len(valid_vals)
+                    return pd.Series([np.nan] * num_nans + valid_vals, index=row.index)
+
+                df = df.apply(shift_row_right, axis=1)
+                df.dropna(how='all', axis=1, inplace=True)
+                
+                # ================= 核心修改位置 =================
+                # 在數字轉換之前，加入最終的空格分割與強制 N 欄對齊
+                df = final_space_split_and_align(df)
+                
+                # 映射數字並清理
+                try:
+                    df = df.map(clean_and_convert_to_numeric) # 兼容新版 Pandas
+                except AttributeError:
+                    df = df.applymap(clean_and_convert_to_numeric) # 兼容舊版 Pandas
+                # ================================================
+
+                # 徹底無 NA
+                df = df.replace([np.nan, pd.NA, None], '')
+                df = df.replace('<NA>', '')
+
+                safe_name = re.sub(r"[\\/*?:\[\]]", "_", section_name)[:31]
+                df.to_excel(writer, sheet_name=safe_name, index=False, header=False)
+                has_data = True
+
+        if has_data:
+            st.success(f"轉換完成！偵測科目：{detected_subject}")
+            st.download_button(
+                label="📥 下載 Excel 檔案",
+                data=output.getvalue(),
+                file_name=f"DSE_Report_v2.2_{detected_subject}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.error("未找到有效表格，請確認 PDF 格式")
+
+st.caption("v2.2 | 全科支援 | 最終空格拆分 + 強制右對齊")
