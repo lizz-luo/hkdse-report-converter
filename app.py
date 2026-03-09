@@ -15,7 +15,7 @@ st.write(
     "2. 智能修補「106 被拆成 10 和 6」等錯位\n"
     "3. 將數據向右對齊、刪除多餘空欄\n"
     "4. 將能轉換的數值變成 Excel 中可計算的數字格式\n"
-    "5. 空位顯示為空白（非 <NA>）"
+    "5. **空位顯示為空白（徹底解決 <NA> 問題）**"
 )
 
 uploaded_file = st.file_uploader("請點擊或拖曳上傳 PDF 檔案", type="pdf")
@@ -23,10 +23,13 @@ uploaded_file = st.file_uploader("請點擊或拖曳上傳 PDF 檔案", type="pd
 
 def clean_and_convert_to_numeric(val):
     """將文字轉換為真實數字的智能函數"""
-    if pd.isna(val):
-        return pd.NA
+    if pd.isna(val) or val is None:
+        return np.nan
 
     val_str = str(val).strip()
+    if not val_str or val_str == '':
+        return np.nan
+
     val_str = val_str.replace(',', '')
 
     if val_str.endswith('%'):
@@ -46,10 +49,8 @@ def clean_and_convert_to_numeric(val):
 
 
 def fix_row_split_numbers(cells):
-    """
-    行級修補邏輯：自動合併被誤切的數字（例如 106 → 10 + 6）
-    """
-    cells = [("" if c is None else str(c)) for c in cells]
+    """行級修補邏輯：自動合併被誤切的數字（例如 106 → 10 + 6）"""
+    cells = [("" if c is None or pd.isna(c) else str(c)) for c in cells]
 
     for i in range(len(cells) - 2):
         a, b, c = cells[i], cells[i + 1], cells[i + 2]
@@ -57,13 +58,12 @@ def fix_row_split_numbers(cells):
         if not (a and b and c):
             continue
 
-        # a、b 都是純數字，a 兩位數 b 一位數，且 c 像是 100%
         if a.isdigit() and b.isdigit() and len(a) == 2 and len(b) == 1:
             c_clean = c.replace(',', '')
             if c_clean.startswith("100"):
-                merged = a + b  # "10" + "6" → "106"
+                merged = a + b
                 cells[i] = merged
-                cells[i + 1] = ""  # 留空，後續向右對齊會處理
+                cells[i + 1] = ""
                 break
 
     return cells
@@ -141,21 +141,23 @@ if uploaded_file is not None:
 
                 df = pd.DataFrame(cleaned_rows)
 
-                # 將空字串 / 空白轉為 NA
-                df.replace(r"^\s*$", pd.NA, regex=True, inplace=True)
+                # 將空字串 / 空白轉為 np.nan（避免 pd.NA）
+                df = df.replace(r"^\s*$", np.nan, regex=True)
+
+                # 先刪掉全空欄
                 df.dropna(how='all', axis=1, inplace=True)
 
                 # 行級數位修補
                 df = df.apply(lambda row: fix_row_split_numbers(list(row)), axis=1, result_type="expand")
 
-                # 再次統一空值
-                df.replace(r"^\s*$", pd.NA, regex=True, inplace=True)
+                # 再次統一空值為 np.nan
+                df = df.replace(r"^\s*$", np.nan, regex=True)
 
-                # 向右對齊
+                # 向右對齊（使用 np.nan）
                 def shift_row_right(row):
                     valid_vals = [v for v in row if pd.notna(v) and str(v).strip() != ""]
                     num_nans = len(row) - len(valid_vals)
-                    return pd.Series([pd.NA] * num_nans + valid_vals, index=row.index)
+                    return pd.Series([np.nan] * num_nans + valid_vals, index=row.index)
 
                 df = df.apply(shift_row_right, axis=1)
 
@@ -165,8 +167,9 @@ if uploaded_file is not None:
                 # 數字轉換
                 df = df.applymap(clean_and_convert_to_numeric)
 
-                # 【最終修正】：將 NA 替換為空字串，避免 Excel 顯示 <NA>
-                df = df.fillna('')
+                # 【徹底解決 <NA> 問題】：多重 NA 清理 + 轉空字串
+                df = df.replace([np.nan, pd.NA, None], '')
+                df = df.replace('<NA>', '')
 
                 safe_sheet_name = re.sub(r"[\\/*?:\[\]]", "_", section_name)[:31]
                 df.to_excel(writer, sheet_name=safe_sheet_name, index=False, header=False)
@@ -174,13 +177,13 @@ if uploaded_file is not None:
 
         if has_data:
             st.success(
-                f"✅ 轉換完成！已偵測科目：{detected_subject}，並套用混合策略修補與數字格式。\n"
-                "空位已顯示為空白格（非 <NA>）。"
+                f"✅ 轉換完成！已偵測科目：{detected_subject}，並徹底解決 <NA> 顯示問題。\n"
+                "所有空位現在都是真正的空白格。"
             )
             st.download_button(
                 label="📥 下載 Excel 檔案",
                 data=output.getvalue(),
-                file_name="DSE_Report_Final.xlsx",
+                file_name="DSE_Report_No_NA.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         else:
