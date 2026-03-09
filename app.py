@@ -8,7 +8,9 @@ import io
 # 頁面設定
 # ==========================================
 st.set_page_config(page_title="DSE 報告轉換工具", page_icon="📊", layout="wide")
+
 st.title("📊 DSE 考評局報告 PDF 轉 Excel 工具")
+st.markdown("請選擇你要轉換的報告類型，並上傳對應的 PDF 檔案。")
 
 # ==========================================
 # 核心處理函數 1：項目分析報告 (Item Analysis)
@@ -59,7 +61,6 @@ def extract_mcq_analysis(file_bytes):
             question_answers = {}
             
             for line in lines:
-                # 尋找題號
                 q_match = re.match(r'^(\d+\([ivx]+\)|\d+)\s+貴校', line.strip())
                 if q_match:
                     if current_question and question_answers:
@@ -73,7 +74,6 @@ def extract_mcq_analysis(file_bytes):
                     question_answers = {}
                     correct_answer = None
                 
-                # 尋找選項與數據 (\uf0fe 是正確答案打勾符號)
                 answer_match = re.match(r'^([ABCD])\s+(\uf0fe)?\s*(\d+)\s+[\d.]+\s+([\d,]+)', line.strip())
                 if answer_match and current_question:
                     option = answer_match.group(1)
@@ -87,7 +87,6 @@ def extract_mcq_analysis(file_bytes):
                     question_answers[f'{option}_your'] = your_no
                     question_answers[f'{option}_day'] = day_no
             
-            # 保存最後一題
             if current_question and question_answers:
                 row = {'Question Number': current_question, 'Corr. Ans': correct_answer}
                 for opt in ['A', 'B', 'C', 'D']:
@@ -116,52 +115,62 @@ def convert_df_to_excel(df, sheet_name):
     return output.getvalue()
 
 # ==========================================
-# 使用者介面 (UI) 設計
+# 建立主畫面兩個標籤頁 (Tabs) 入口
 # ==========================================
-st.sidebar.header("⚙️ 設定選項")
-report_type = st.sidebar.radio(
-    "請選擇你要轉換的報告類型：",
-    ("📝 項目分析報告 (Item Analysis)", "✅ 多項選擇題報告 (MCQ Analysis)")
-)
+tab1, tab2 = st.tabs(["📝 項目分析報告 (Item Analysis)", "✅ 多項選擇題報告 (MCQ Analysis)"])
 
-st.markdown("請在下方上傳考評局的 DSE PDF 報告，系統會根據左側選擇的模式進行轉換。")
+# -----------------
+# 標籤頁 1 的內容
+# -----------------
+with tab1:
+    st.subheader("項目分析報告轉換區")
+    st.info("💡 請上傳包含「平均分、標準差、差距」的常規項目分析報告 PDF。")
+    file_item = st.file_uploader("選擇項目分析 PDF", type=["pdf"], key="file_item")
 
-uploaded_file = st.file_uploader("拖曳或選擇 PDF 檔案", type=["pdf"])
+    if file_item is not None:
+        try:
+            df_item = extract_item_analysis(file_item)
+            if df_item.empty:
+                st.warning("⚠️ 無法提取數據！請確認檔案格式是否正確。")
+            else:
+                st.success(f"✅ 成功提取 {len(df_item)} 筆數據！")
+                st.dataframe(df_item, use_container_width=True)
+                
+                st.download_button(
+                    label="📥 下載項目分析 Excel",
+                    data=convert_df_to_excel(df_item, "Item Analysis"),
+                    file_name=f"{file_item.name.replace('.pdf', '')}_項目分析.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_item",
+                    type="primary"
+                )
+        except Exception as e:
+            st.error(f"❌ 處理錯誤：{str(e)}")
 
-if uploaded_file is not None:
-    st.info("檔案讀取中，請稍候...")
-    
-    try:
-        # 根據選擇的模式調用不同的處理函數
-        if "Item Analysis" in report_type:
-            df = extract_item_analysis(uploaded_file)
-            sheet_name = "Item Analysis"
-            export_name = "項目分析報告"
-        else:
-            df = extract_mcq_analysis(uploaded_file)
-            sheet_name = "MCQ Analysis"
-            export_name = "MCQ分析報告"
-        
-        # 顯示結果
-        if df.empty:
-            st.warning(f"⚠️ 無法提取數據！請確認你上傳的 PDF 是否為**{export_name}**，且模式選擇正確。")
-        else:
-            st.success(f"✅ 成功提取 {len(df)} 筆數據！")
-            
-            st.subheader("數據預覽")
-            st.dataframe(df, use_container_width=True)
-            
-            # 下載按鈕
-            excel_data = convert_df_to_excel(df, sheet_name)
-            file_base_name = uploaded_file.name.replace('.pdf', '')
-            
-            st.download_button(
-                label=f"📥 下載 Excel 檔案 ({export_name})",
-                data=excel_data,
-                file_name=f"{file_base_name}_{export_name}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary"
-            )
-            
-    except Exception as e:
-        st.error(f"❌ 處理檔案時發生錯誤：{str(e)}")
+# -----------------
+# 標籤頁 2 的內容
+# -----------------
+with tab2:
+    st.subheader("多項選擇題報告轉換區")
+    st.info("💡 請上傳包含「ABCD選項、人數百分比、打勾正確答案」的 MCQ 報告 PDF。")
+    file_mcq = st.file_uploader("選擇 MCQ 分析 PDF", type=["pdf"], key="file_mcq")
+
+    if file_mcq is not None:
+        try:
+            df_mcq = extract_mcq_analysis(file_mcq)
+            if df_mcq.empty:
+                st.warning("⚠️ 無法提取數據！請確認檔案是否為 MCQ 報告。")
+            else:
+                st.success(f"✅ 成功提取 {len(df_mcq)} 題的數據！")
+                st.dataframe(df_mcq, use_container_width=True)
+                
+                st.download_button(
+                    label="📥 下載 MCQ 分析 Excel",
+                    data=convert_df_to_excel(df_mcq, "MCQ Analysis"),
+                    file_name=f"{file_mcq.name.replace('.pdf', '')}_MCQ分析.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_mcq",
+                    type="primary"
+                )
+        except Exception as e:
+            st.error(f"❌ 處理錯誤：{str(e)}")
