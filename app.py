@@ -64,28 +64,24 @@ def extract_smart_table(page):
     return rows
 
 def align_to_rightmost(df):
-    """對齊到最右有數據欄"""
-    # 轉string避免str錯誤
-    df_str = df.astype(str)
+    """對齊到最右有數據欄（N欄）"""
+    # 找到全局最大欄數（最寬行）
+    max_cols = df.apply(lambda row: (row.astype(str).str.strip() != '').sum(), axis=1).max()
     
-    # 找到最右有數據列
-    has_data_cols = (df_str != '').any(axis=0)
-    rightmost_col = has_data_cols[has_data_cols].index.max()
+    # 統一所有行到最大欄數
+    df = df.reindex(columns=range(max_cols), fill_value='')
     
-    # 統一寬度
-    df = df.reindex(columns=range(rightmost_col + 1), fill_value='')
-    
-    # 右對齊
-    def right_align_row(series):
+    # 每行右對齊到最右欄
+    def right_align_to_max(series):
         series_str = series.astype(str)
         valid_mask = series_str.str.strip() != ''
         valid = series[valid_mask].tolist()
         n_empty = len(series) - len(valid)
-        return pd.Series([''] * n_empty + valid)
+        return pd.Series([''] * n_empty + valid, index=series.index)
     
-    df = df.apply(right_align_row, axis=1)
+    df = df.apply(right_align_to_max, axis=1)
     
-    # 刪左空欄
+    # 刪除完全空的左欄
     df_str = df.astype(str)
     df = df.loc[:, (df_str != '').any(axis=0)]
     
