@@ -1,0 +1,23 @@
+name: Keep Streamlit Awake
+
+on:
+  schedule:
+    - cron: "0 */10 * * *"   # 每 10 小時
+  workflow_dispatch:         # 手動觸發
+
+jobs:
+  keep-awake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Empty commit to reset timer
+        run: |
+          git commit --allow-empty -m "chore: keep streamlit awake"
+          git push
