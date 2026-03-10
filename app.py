@@ -13,12 +13,13 @@ st.title("📊 DSE 考評局報告 PDF 轉 Excel 工具")
 st.markdown("請選擇你要轉換的報告類型，並上傳對應的 PDF 檔案。")
 
 # ==========================================
-# 核心處理函數 1：項目分析報告 (Item Analysis) - 完整數字格式化
+# 核心處理函數 1：項目分析報告 (精簡版，移除兩個差距欄位)
 # ==========================================
 @st.cache_data
 def extract_item_analysis(file_bytes):
+    # 簡化正則表達式，直接略過最後兩個差距欄位
     row_pattern = re.compile(
-        r'^(.*?)\s+(\d+)\s+(\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+%)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+%)\s+(\d+\.\d+)\s*([+-]?\d+\.\d+)\s*([+-]?\d+%)$'
+        r'^(.*?)\s+(\d+)\s+(\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+%)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+%)\s+(\d+\.\d+)\s*([+-]?\d+\.\d+)\s*'
     )
     extracted_data = []
     
@@ -32,36 +33,37 @@ def extract_item_analysis(file_bytes):
                 clean_line = " ".join(line.split())
                 match = row_pattern.search(clean_line)
                 if match:
-                    extracted_data.append(match.groups())
+                    # 只取前 11 個欄位，略過差距 Diff (b)-(c) 和差距 Diff %
+                    extracted_data.append(match.groups()[:11])
 
+    # 精簡欄位：去掉兩個差距欄位
     columns = [
         "項目/題號 (Item & Ref)", "滿分 (Max Mark)", "人數 No.", 
         "作答 Attempted % (貴校)", "平均分 Mean (貴校)", "平均分 Mean % (貴校)", 
         "標準差 S.D. (貴校)", "作答 Attempted % (日校)", "平均分 Mean (日校)", 
-        "平均分 Mean % (日校)", "標準差 S.D. (日校)", "差距 Diff (b)-(c)", "差距 Diff %"
+        "平均分 Mean % (日校)", "標準差 S.D. (日校)"
     ]
     df = pd.DataFrame(extracted_data, columns=columns)
     
-    # 【全面數字格式化】處理所有數字欄位
+    # 數字格式化（去掉兩個差距欄位後的版本）
     numeric_cols = [
         "滿分 (Max Mark)", "人數 No.",
         "作答 Attempted % (貴校)", "平均分 Mean (貴校)", "標準差 S.D. (貴校)", 
-        "作答 Attempted % (日校)", "平均分 Mean (日校)", "標準差 S.D. (日校)", 
-        "差距 Diff (b)-(c)"
+        "作答 Attempted % (日校)", "平均分 Mean (日校)", "標準差 S.D. (日校)"
     ]
     
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
-    # 特殊處理：把百分比 (%) 轉成小數點格式 (94% -> 0.94)
-    pct_cols = ["平均分 Mean % (貴校)", "平均分 Mean % (日校)", "差距 Diff %"]
+    # 百分比轉小數點格式
+    pct_cols = ["平均分 Mean % (貴校)", "平均分 Mean % (日校)"]
     for col in pct_cols:
         df[col] = df[col].str.replace('%', '').astype(float) / 100
     
     return df
 
 # ==========================================
-# 核心處理函數 2：多項選擇題報告 (MCQ Analysis) - 已優化數字格式
+# 核心處理函數 2：多項選擇題報告 (MCQ Analysis)
 # ==========================================
 @st.cache_data
 def extract_mcq_analysis(file_bytes):
@@ -121,7 +123,6 @@ def extract_mcq_analysis(file_bytes):
         ]
         df = df[column_order]
         
-        # 【強制轉整數】所有 _No. 欄位
         for col in df.columns:
             if '_No.' in col:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
@@ -156,7 +157,7 @@ with tab1:
             if df_item.empty:
                 st.warning("⚠️ 無法提取數據！請確認檔案格式是否正確。")
             else:
-                st.success(f"✅ 成功提取 {len(df_item)} 筆數據！")
+                st.success(f"✅ 成功提取 {len(df_item)} 筆數據！(已移除兩個差距欄位)")
                 st.dataframe(df_item, use_container_width=True)
                 
                 st.download_button(
