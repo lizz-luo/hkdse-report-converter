@@ -13,7 +13,7 @@ st.title("📊 DSE 考評局報告 PDF 轉 Excel 工具")
 st.markdown("請選擇你要轉換的報告類型，並上傳對應的 PDF 檔案。")
 
 # ==========================================
-# 核心處理函數 1：項目分析報告 (Item Analysis)
+# 核心處理函數 1：項目分析報告 (Item Analysis) - 完整數字格式化
 # ==========================================
 @st.cache_data
 def extract_item_analysis(file_bytes):
@@ -42,16 +42,26 @@ def extract_item_analysis(file_bytes):
     ]
     df = pd.DataFrame(extracted_data, columns=columns)
     
-    # 將項目分析的純數字欄位也轉換為數字格式 (遇到無法轉換的保持原樣)
-    numeric_cols = ["滿分 (Max Mark)", "人數 No.", "平均分 Mean (貴校)", "標準差 S.D. (貴校)", 
-                    "平均分 Mean (日校)", "標準差 S.D. (日校)", "差距 Diff (b)-(c)"]
+    # 【全面數字格式化】處理所有數字欄位
+    numeric_cols = [
+        "滿分 (Max Mark)", "人數 No.",
+        "作答 Attempted % (貴校)", "平均分 Mean (貴校)", "標準差 S.D. (貴校)", 
+        "作答 Attempted % (日校)", "平均分 Mean (日校)", "標準差 S.D. (日校)", 
+        "差距 Diff (b)-(c)"
+    ]
+    
     for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors='ignore')
-        
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    # 特殊處理：把百分比 (%) 轉成小數點格式 (94% -> 0.94)
+    pct_cols = ["平均分 Mean % (貴校)", "平均分 Mean % (日校)", "差距 Diff %"]
+    for col in pct_cols:
+        df[col] = df[col].str.replace('%', '').astype(float) / 100
+    
     return df
 
 # ==========================================
-# 核心處理函數 2：多項選擇題報告 (MCQ Analysis)
+# 核心處理函數 2：多項選擇題報告 (MCQ Analysis) - 已優化數字格式
 # ==========================================
 @st.cache_data
 def extract_mcq_analysis(file_bytes):
@@ -74,7 +84,6 @@ def extract_mcq_analysis(file_bytes):
                     if current_question and question_answers:
                         row = {'Question Number': current_question, 'Corr. Ans': correct_answer}
                         for opt in ['A', 'B', 'C', 'D']:
-                            # 預設補 0 而非空字串，確保後續能轉為數字
                             row[f'Your school {opt}_No.'] = question_answers.get(f'{opt}_your', '0')
                             row[f'Day schools {opt}_No.'] = question_answers.get(f'{opt}_day', '0')
                         mcq_data.append(row)
@@ -112,7 +121,7 @@ def extract_mcq_analysis(file_bytes):
         ]
         df = df[column_order]
         
-        # 【關鍵更新】將所有包含 "_No." 的欄位強制轉換為整數 (Integer)
+        # 【強制轉整數】所有 _No. 欄位
         for col in df.columns:
             if '_No.' in col:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
@@ -176,8 +185,6 @@ with tab2:
                 st.warning("⚠️ 無法提取數據！請確認檔案是否為 MCQ 報告。")
             else:
                 st.success(f"✅ 成功提取 {len(df_mcq)} 題的數據！")
-                
-                # 讓 Streamlit 預覽表格也能正確顯示數字格式（靠右對齊）
                 st.dataframe(df_mcq, use_container_width=True)
                 
                 st.download_button(
