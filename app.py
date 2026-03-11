@@ -10,7 +10,7 @@ import os
 # ==========================================
 st.set_page_config(page_title="HKDSE Stastical Report Data Converter | HKDSE學校統計報告 數據轉換工具", page_icon="🔁", layout="wide")
 
-st.title("HKDSE學校統計報告 數據轉換工具 | HKDSE Stastical Report Data Converter")
+st.title("📊 HKDSE學校統計報告 數據轉換工具 | HKDSE Stastical Report Data Converter")
 st.markdown("""
 請選擇你要轉換的報告類型，並上載相關的 PDF 檔案。 本工具將自動提取有用數據，並轉換為 Excel 格式，以便貼上至 QSIP 分析工具。 \n\n
 
