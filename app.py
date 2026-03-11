@@ -10,11 +10,11 @@ import os
 # ==========================================
 st.set_page_config(page_title="HKDSE Stastical Report Data Converter | HKDSE學校統計報告 數據轉換工具", page_icon="🔁", layout="wide")
 
-st.title("📊 HKDSE學校統計報告 數據轉換工具 | HKDSE Stastical Report Data Converter")
+st.title("HKDSE學校統計報告 數據轉換工具 | HKDSE Stastical Report Data Converter")
 st.markdown("""
 請選擇你要轉換的報告類型，並上載相關的 PDF 檔案。 本工具將自動提取有用數據，並轉換為 Excel 格式，以便貼上至 QSIP 分析工具。 \n\n
 
-Please select the report type and upload the corresponding PDF file. This tool will extract useful data and convert it into Excel format that is ready to be pasted into the QSIP analysis tool.
+*Please select the report type and upload the corresponding PDF file. This tool will extract useful data and convert it into Excel format that is ready to be pasted into the QSIP analysis tool.*
 """)
 
 # ==========================================
@@ -157,7 +157,7 @@ with tab1:
         表格橫向列出「平均分 Mean」、「標準差 S.D.」等數據。
         
         **Applicable for reports formatted like:**
-        *The table horizontally displays data such as 'Mean' and 'S.D.'.*
+        The table horizontally displays data such as 'Mean' and 'S.D.'.
         """)
         if os.path.exists("example1_item.png"):
             st.image("example1_item.png", caption="項目分析表格示例 | Example of Item Analysis Table", use_column_width=True)
@@ -204,7 +204,7 @@ with tab2:
         表格列出「A, B, C, D」選項的選擇人數，並附有 ☑️ 標記顯示正確答案。
         
         **Applicable for reports formatted like:**
-        *The table lists the number of students for options 'A, B, C, D' and uses a ☑️ mark to indicate the correct answer.*
+        The table lists the number of students for options 'A, B, C, D' and uses a ☑️ mark to indicate the correct answer.
         """)
         if os.path.exists("example2_mcq.png"):
             st.image("example2_mcq.png", caption="多項選擇題表格示例 | Example of MCQ Analysis Table", use_column_width=True)
