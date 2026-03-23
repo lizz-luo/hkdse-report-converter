@@ -8,13 +8,13 @@ import os
 # ==========================================
 # 頁面設定 / Page Configuration
 # ==========================================
-st.set_page_config(page_title="HKDSE Stastical Report Data Converter | HKDSE學校統計報告 數據轉換工具", page_icon="🔁", layout="wide")
+st.set_page_config(page_title="HKDSE Statistical Report Data Converter | HKDSE學校統計報告 數據轉換工具", page_icon="🔁", layout="wide")
 
-st.title("📊 HKDSE學校統計報告 數據轉換工具 | HKDSE Stastical Report Data Converter")
+st.title("📊 HKDSE學校統計報告 數據轉換工具 | HKDSE Statistical Report Data Converter")
 st.markdown("""
-請選擇你要轉換的報告類型，並上載相關的 PDF 檔案。 本工具將自動提取有用數據，並轉換為 Excel 格式，以便貼上至 QSIP 分析工具。 \n\n
+請選擇你要轉換的報告類型，並上載相關的 PDF 檔案。 本工具將自動提取有用數據，並轉換為 Excel 格式，以便貼上至 CUHK QSIP 分析工具。 \n\n
 
-*Please select the report type and upload the corresponding PDF file. This tool will extract useful data and convert it into Excel format that is ready to be pasted into the QSIP analysis tool.*
+*Please select the 'Item Analysis Report' or 'MCQ Analysis Report' and upload the corresponding PDF file. This tool will extract useful data and convert it into Excel format that is ready to be pasted into the CUHK QSIP analysis tool.*
 """)
 
 # ==========================================
@@ -40,23 +40,23 @@ def extract_item_analysis(file_bytes):
                     extracted_data.append(match.groups()[:11])
 
     columns = [
-        "項目/題號 (Item & Ref)", "滿分 (Max Mark)", "人數 No.", 
-        "作答 Attempted % (貴校 Your Sch)", "平均分 Mean (貴校 Your Sch)", "平均分 Mean % (貴校 Your Sch)", 
-        "標準差 S.D. (貴校 Your Sch)", "作答 Attempted % (日校 Day Sch)", "平均分 Mean (日校 Day Sch)", 
-        "平均分 Mean % (日校 Day Sch)", "標準差 S.D. (日校 Day Sch)"
+        "Item", "Max Mark", "Your school Attm. No.", 
+        "Your school Attem.  %", "Your school Mean", "Your school Mean %", 
+        "Your school SD", "Day schools Attem.  %", "Day schools Mean", 
+        "Day schools Mean %", "Day schools SD"
     ]
     df = pd.DataFrame(extracted_data, columns=columns)
     
     numeric_cols = [
-        "滿分 (Max Mark)", "人數 No.",
-        "作答 Attempted % (貴校 Your Sch)", "平均分 Mean (貴校 Your Sch)", "標準差 S.D. (貴校 Your Sch)", 
-        "作答 Attempted % (日校 Day Sch)", "平均分 Mean (日校 Day Sch)", "標準差 S.D. (日校 Day Sch)"
+        "Max Mark", "Your school Attm. No.",
+        "Your school Attem.  %", "Your school Mean", "Your school SD", 
+        "Day schools Attem.  %", "Day schools Mean", "Day schools SD"
     ]
     
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
-    pct_cols = ["平均分 Mean % (貴校 Your Sch)", "平均分 Mean % (日校 Day Sch)"]
+    pct_cols = ["Your school Mean %", "Day schools Mean %"]
     for col in pct_cols:
         df[col] = df[col].str.replace('%', '').astype(float) / 100
     
