@@ -146,7 +146,7 @@ def extract_latest_dse_total_data(file_bytes):
             if not text:
                 continue
 
-            if "總數" in text and "貴校" in text:
+            if "總數" in text and "貴校" in text and "5**" in text:
                 lines = text.split('\n')
                 in_total_section = False
 
