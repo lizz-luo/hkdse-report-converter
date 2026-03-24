@@ -408,8 +408,6 @@ with tab2:
             st.warning("⚠️ (提示: 系統未找到 example2_mcq.png | Image not found)")
             
     with col4:
-        global_file = st.file_uploader("📂 請於此處上載「多項選擇題分析」PDF  |  Upload 'MCQ Analysis' PDF here", type=["pdf"], key="global_file")
-        st.caption("🛡️ 本工具僅在記憶體中暫存 PDF，處理後立即刪除，不會儲存至硬碟或雲端。 | PDFs are held temporarily in RAM only and deleted after processing. No storage on disk or cloud.")
 
         if global_file is not None:
             with st.spinner("系統正在處理檔案，請稍候... | Processing file, please wait..."):
