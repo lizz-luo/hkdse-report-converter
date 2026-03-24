@@ -10,12 +10,18 @@ import os
 # ==========================================
 st.set_page_config(page_title="HKDSE Statistical Report Data Converter | HKDSE學校統計報告 數據轉換工具", page_icon="🔁", layout="wide")
 
-st.title("📊 HKDSE學校統計報告 數據轉換工具 | HKDSE Statistical Report Data Converter")
-st.markdown("""
-請選擇你要轉換的報告類型，並上載相關的 PDF 檔案。 本工具將自動提取有用數據，並轉換為 Excel 格式，以便貼上至 CUHK QSIP 分析工具。 \n\n
+st.title("📊 HKDSE學校統計報告 數據轉換工具")
+st.markdown("本工具將自動提取考評局 PDF 報告中的數據，轉換為 Excel 格式，方便貼上至 CUHK QSIP 分析工具。")
 
-*Please select the 'Item Analysis Report' or 'MCQ Analysis Report' and upload the corresponding PDF file. This tool will extract useful data and convert it into Excel format that is ready to be pasted into the CUHK QSIP analysis tool.*
-""")
+# ==========================================
+# 側邊欄：共用上傳區 / Sidebar: Global Upload
+# ==========================================
+with st.sidebar:
+    st.header("📂 檔案上載區")
+    st.info("💡 你可以在此上載包含完整數據的考評局 PDF，所有標籤頁將自動共用此檔案進行分析。")
+    global_file = st.file_uploader("上載 PDF 報告 | Upload PDF", type=["pdf"], key="global_file")
+    st.caption("🛡️ 本工具僅在記憶體中暫存 PDF，處理後立即刪除，不會儲存至硬碟或雲端。")
+
 
 # ==========================================
 # 核心處理函數 1：項目分析報告 (Item Analysis)
@@ -293,13 +299,14 @@ with tab0:
         Automatically extracts the latest year's 'Total' data and generates comparative bar and line charts.
         """)
     with col_t2:
-        file_total = st.file_uploader("📂 請於此處上載 PDF (總數表) | Upload PDF here", type=["pdf"], key="file_total")
-        st.caption("🛡️ 本工具僅在記憶體中暫存 PDF，處理後立即刪除，不會儲存至硬碟或雲端。")
-
-        if file_total is not None:
+        if global_file is None:
+            st.warning("👈 請先在左側邊欄上載 PDF 檔案 | Please upload a PDF file in the sidebar first.")
+        else:
             with st.spinner("系統正在提取最新年份數據並繪製圖表... | Processing and rendering charts..."):
                 try:
-                    df_total = extract_latest_dse_total_data(file_total)
+                    # Reset pointer just in case
+                    global_file.seek(0)
+                    df_total = extract_latest_dse_total_data(global_file)
                     if df_total.empty:
                         st.error("❌ 無法提取數據！請確認你上載的 PDF 包含「總數」表格。")
                     else:
@@ -319,7 +326,7 @@ with tab0:
                         st.download_button(
                             label="📥 下載數據 Excel | Download Data (Excel)",
                             data=convert_df_to_excel(df_total, "Total Analysis"),
-                            file_name=f"{file_total.name.replace('.pdf', '')}_TotalData.xlsx",
+                            file_name=f"{global_file.name.replace('.pdf', '')}_TotalData.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             key="btn_total",
                             type="primary"
@@ -351,13 +358,13 @@ with tab1:
             st.warning("⚠️ (提示: 系統未找到 example1_item.png | Image not found)")
             
     with col2:
-        file_item = st.file_uploader("📂 請於此處上載「項目分析」PDF  |  Upload 'Item Analysis' PDF here", type=["pdf"], key="file_item")
-        st.caption("🛡️ 本工具僅在記憶體中暫存 PDF，處理後立即刪除，不會儲存至硬碟或雲端。 | PDFs are held temporarily in RAM only and deleted after processing. No storage on disk or cloud.")
-
-        if file_item is not None:
+        if global_file is None:
+            st.warning("👈 請先在左側邊欄上載 PDF 檔案 | Please upload a PDF file in the sidebar first.")
+        else:
             with st.spinner("系統正在處理檔案，請稍候... | Processing file, please wait..."):
                 try:
-                    df_item = extract_item_analysis(file_item)
+                    global_file.seek(0)
+                    df_item = extract_item_analysis(global_file)
                     if df_item.empty:
                         st.error("❌ 無法提取數據！請確認你上載的是否為正確的「項目分析報告」。 \n *Failed to extract data! Please ensure you uploaded the correct 'Item Analysis Report'.*")
                     else:
@@ -369,7 +376,7 @@ with tab1:
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
                             data=convert_df_to_excel(df_item, "Item Analysis"),
-                            file_name=f"{file_item.name.replace('.pdf', '')}_ItemAnalysis.xlsx",
+                            file_name=f"{global_file.name.replace('.pdf', '')}_ItemAnalysis.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             key="btn_item",
                             type="primary"
@@ -417,7 +424,7 @@ with tab2:
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
                             data=convert_df_to_excel(df_mcq, "MCQ Analysis"),
-                            file_name=f"{file_mcq.name.replace('.pdf', '')}_MCQAnalysis.xlsx",
+                            file_name=f"{global_file.name.replace('.pdf', '')}_MCQAnalysis.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             key="btn_mcq",
                             type="primary"
