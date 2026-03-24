@@ -187,30 +187,30 @@ def extract_latest_dse_total_data(file_bytes):
 
 def generate_dse_charts(df_raw):
     # 計算單獨等級
-    levels_single = ['UNCL', '1', '2', '3', '4', '5', '5*', '5**']
+    levels_single = ['5**', '5*', '5', '4', '3', '2', '1', 'UNCL']
 
-    # 貴校單獨等級人數
+    # 貴校單獨等級人數 (已反轉，5** 在前)
     ys_single_nums = [
-        df_raw.loc[df_raw['等級']=='UNCL', '貴校'].values[0],
-        df_raw.loc[df_raw['等級']=='1+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='2+', '貴校'].values[0],
-        df_raw.loc[df_raw['等級']=='2+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='3+', '貴校'].values[0],
-        df_raw.loc[df_raw['等級']=='3+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='4+', '貴校'].values[0],
-        df_raw.loc[df_raw['等級']=='4+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='5+', '貴校'].values[0],
-        df_raw.loc[df_raw['等級']=='5+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='5*+', '貴校'].values[0],
+        df_raw.loc[df_raw['等級']=='5**', '貴校'].values[0],
         df_raw.loc[df_raw['等級']=='5*+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='5**', '貴校'].values[0],
-        df_raw.loc[df_raw['等級']=='5**', '貴校'].values[0]
+        df_raw.loc[df_raw['等級']=='5+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='5*+', '貴校'].values[0],
+        df_raw.loc[df_raw['等級']=='4+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='5+', '貴校'].values[0],
+        df_raw.loc[df_raw['等級']=='3+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='4+', '貴校'].values[0],
+        df_raw.loc[df_raw['等級']=='2+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='3+', '貴校'].values[0],
+        df_raw.loc[df_raw['等級']=='1+', '貴校'].values[0] - df_raw.loc[df_raw['等級']=='2+', '貴校'].values[0],
+        df_raw.loc[df_raw['等級']=='UNCL', '貴校'].values[0]
     ]
 
-    # 日校單獨等級人數
+    # 日校單獨等級人數 (已反轉，5** 在前)
     ds_single_nums = [
-        df_raw.loc[df_raw['等級']=='UNCL', '日校'].values[0],
-        df_raw.loc[df_raw['等級']=='1+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='2+', '日校'].values[0],
-        df_raw.loc[df_raw['等級']=='2+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='3+', '日校'].values[0],
-        df_raw.loc[df_raw['等級']=='3+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='4+', '日校'].values[0],
-        df_raw.loc[df_raw['等級']=='4+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='5+', '日校'].values[0],
-        df_raw.loc[df_raw['等級']=='5+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='5*+', '日校'].values[0],
+        df_raw.loc[df_raw['等級']=='5**', '日校'].values[0],
         df_raw.loc[df_raw['等級']=='5*+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='5**', '日校'].values[0],
-        df_raw.loc[df_raw['等級']=='5**', '日校'].values[0]
+        df_raw.loc[df_raw['等級']=='5+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='5*+', '日校'].values[0],
+        df_raw.loc[df_raw['等級']=='4+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='5+', '日校'].values[0],
+        df_raw.loc[df_raw['等級']=='3+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='4+', '日校'].values[0],
+        df_raw.loc[df_raw['等級']=='2+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='3+', '日校'].values[0],
+        df_raw.loc[df_raw['等級']=='1+', '日校'].values[0] - df_raw.loc[df_raw['等級']=='2+', '日校'].values[0],
+        df_raw.loc[df_raw['等級']=='UNCL', '日校'].values[0]
     ]
 
     ys_total = df_raw.loc[df_raw['等級']=='出席 Sat', '貴校'].values[0]
