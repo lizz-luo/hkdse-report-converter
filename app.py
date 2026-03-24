@@ -241,6 +241,7 @@ def generate_dse_charts(df_raw):
         plot_bgcolor='white',
     )
     fig_bar.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgray', ticksuffix="%", range=y_range)
+    fig_bar.update_xaxes(type='category')
 
     # === 折線圖 ===
     fig_line = go.Figure()
