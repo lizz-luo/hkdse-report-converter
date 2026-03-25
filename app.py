@@ -251,6 +251,18 @@ with tab0:
                         st.success(f"✅ 提取成功！已取得 {exam_year} 年數據。")
 
                         st.subheader(f"📋 {subject_name} {exam_year} 數據概覽 | Data Preview")
+
+                        with st.expander("✂️ 快速複製單列數據 (貼上至 Excel) | Quick Copy Columns"):
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.caption("貴校人數 (Your school)")
+                                ys_text = "\n".join(df_total["貴校"].astype(str).tolist())
+                                st.code(ys_text, language="text")
+                            with c2:
+                                st.caption("日校人數 (Day schools)")
+                                ds_text = "\n".join(df_total["日校"].astype(str).tolist())
+                                st.code(ds_text, language="text")
+
                         st.table(df_total.style.format(precision=2))
 
                         st.download_button(
@@ -299,6 +311,19 @@ with tab1:
                         st.success(f"✅ 提取成功！共獲取 {len(df_item)} 行數據。 \n *Extraction successful! {len(df_item)} rows retrieved.*")
 
                         st.subheader("📋 數據概覽 | Data Preview")
+
+                        # 提供一鍵複製功能
+                        with st.expander("✂️ 快速複製單列數據 (貼上至 Excel) | Quick Copy Columns"):
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.caption("貴校平均分 (Your school Mean)")
+                                ys_mean_text = "\n".join(df_item["Your school Mean"].astype(str).tolist())
+                                st.code(ys_mean_text, language="text")
+                            with c2:
+                                st.caption("日校平均分 (Day schools Mean)")
+                                ds_mean_text = "\n".join(df_item["Day schools Mean"].astype(str).tolist())
+                                st.code(ds_mean_text, language="text")
+
                         # 將浮點數格式化為兩位小數作預覽
                         st.table(df_item.style.format(precision=2))
 
