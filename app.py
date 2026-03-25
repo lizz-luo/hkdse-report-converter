@@ -265,14 +265,7 @@ with tab0:
 
                         st.table(df_total.style.format(precision=2))
 
-                        st.download_button(
-                            label="📥 下載 Excel 檔案 | Download Excel File",
-                            data=convert_df_to_excel(df_total, "Total Analysis"),
-                            file_name=f"{global_file.name.replace('.pdf', '')}_TotalData.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="btn_total",
-                            type="primary"
-                        )
+
                 except Exception as e:
                     st.error(f"❌ 處理檔案時發生錯誤：{str(e)}")
 
