@@ -251,7 +251,7 @@ with tab0:
                         st.success(f"✅ 提取成功！已取得 {exam_year} 年數據。")
 
                         st.subheader(f"📋 {subject_name} {exam_year} 數據概覽 | Data Preview")
-                        st.table(df_total)
+                        st.table(df_total.style.format(precision=2))
 
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
@@ -299,7 +299,8 @@ with tab1:
                         st.success(f"✅ 提取成功！共獲取 {len(df_item)} 行數據。 \n *Extraction successful! {len(df_item)} rows retrieved.*")
 
                         st.subheader("📋 數據概覽 | Data Preview")
-                        st.table(df_item)
+                        # 將浮點數格式化為兩位小數作預覽
+                        st.table(df_item.style.format(precision=2))
 
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
@@ -347,7 +348,7 @@ with tab2:
                         st.success(f"✅ 提取成功！共獲取 {len(df_mcq)} 題的數據。 \n *Extraction successful! Data for {len(df_mcq)} questions retrieved. *")
 
                         st.subheader("📋 數據概覽 | Data Preview")
-                        st.table(df_mcq)
+                        st.table(df_mcq.style.format(precision=2))
 
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
