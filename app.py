@@ -251,7 +251,7 @@ with tab0:
                         st.success(f"✅ 提取成功！已取得 {exam_year} 年數據。")
 
                         st.subheader(f"📋 {subject_name} {exam_year} 數據概覽 | Data Preview")
-                                                with st.expander("✂️ 快速複製單列數據 (貼上至 Excel) | Quick Copy Columns"):
+                        with st.expander("✂️ 快速複製單列數據 (貼上至 Excel) | Quick Copy Columns"):
                             c1, c2 = st.columns(2)
                             with c1:
                                 st.caption("貴校人數 (Your school)")
