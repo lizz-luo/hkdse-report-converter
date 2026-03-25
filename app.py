@@ -251,7 +251,58 @@ with tab0:
                         st.success(f"✅ 提取成功！已取得 {exam_year} 年數據。")
 
                         st.subheader(f"📋 {subject_name} {exam_year} 數據概覽 | Data Preview")
+                                                with st.expander("✂️ 快速複製單列數據 (貼上至 Excel) | Quick Copy Columns"):
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.caption("貴校人數 (Your school)")
+                                ys_text = "\n".join(df_total["貴校"].astype(str).tolist())
+                                st.code(ys_text, language="text")
+                            with c2:
+                                st.caption("日校人數 (Day schools)")
+                                ds_text = "\n".join(df_total["日校"].astype(str).tolist())
+                                st.code(ds_text, language="text")
 
+                        st.table(df_total.style.format(precision=2))
+
+
+                except Exception as e:
+                    st.error(f"❌ 處理檔案時發生錯誤：{str(e)}")
+
+# -----------------
+# 標籤頁 1 的內容 / Tab 1 Content
+# -----------------
+with tab1:
+    st.subheader("📝 項目分析報告轉換 | Item Analysis Converter")
+
+    col1, col2 = st.columns([2, 5])
+
+    with col1:
+        st.info("""
+        💡 **本區適用於以下格式的報告：**
+        表格橫向列出「平均分 Mean」、「標準差 S.D.」等數據。
+
+        **Applicable for reports formatted like:**
+        The table horizontally displays data such as 'Mean' and 'S.D.'.
+        """)
+        if os.path.exists("example1_item.png"):
+            st.image("example1_item.png", caption="項目分析表格示例 | Example of Item Analysis Table", use_column_width=True)
+        else:
+            st.warning("⚠️ (提示: 系統未找到 example1_item.png | Image not found)")
+
+    with col2:
+        if global_file is None:
+            st.warning("👆 請先在上方上載 PDF 檔案 | Please upload a PDF file above first.")
+        else:
+            with st.spinner("系統正在處理檔案，請稍候... | Processing file, please wait..."):
+                try:
+                    global_file.seek(0)
+                    df_item = extract_item_analysis(global_file)
+                    if df_item.empty:
+                        st.error("❌ 無法提取數據！請確認你上載的是否為正確的「項目分析報告」。 \n *Failed to extract data! Please ensure you uploaded the correct 'Item Analysis Report'.*")
+                    else:
+                        st.success(f"✅ 提取成功！共獲取 {len(df_item)} 行數據。 \n *Extraction successful! {len(df_item)} rows retrieved.*")
+
+                        st.subheader("📋 數據概覽 | Data Preview")
                         st.table(df_item.style.format(precision=2))
 
                         st.download_button(
