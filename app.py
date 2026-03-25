@@ -251,7 +251,7 @@ with tab0:
                         st.success(f"✅ 提取成功！已取得 {exam_year} 年數據。")
 
                         st.subheader(f"📋 {subject_name} {exam_year} 數據概覽 | Data Preview")
-                        st.dataframe(df_total, use_container_width=True, height=int((len(df_total) + 1) * 35.5) + 3)
+                        st.table(df_total)
 
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
@@ -299,7 +299,7 @@ with tab1:
                         st.success(f"✅ 提取成功！共獲取 {len(df_item)} 行數據。 \n *Extraction successful! {len(df_item)} rows retrieved.*")
 
                         st.subheader("📋 數據概覽 | Data Preview")
-                        st.dataframe(df_item, use_container_width=True, height=int((len(df_item) + 1) * 35.5) + 3)
+                        st.table(df_item)
 
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
@@ -347,7 +347,7 @@ with tab2:
                         st.success(f"✅ 提取成功！共獲取 {len(df_mcq)} 題的數據。 \n *Extraction successful! Data for {len(df_mcq)} questions retrieved. *")
 
                         st.subheader("📋 數據概覽 | Data Preview")
-                        st.dataframe(df_mcq, use_container_width=True, height=int((len(df_mcq) + 1) * 35.5) + 3)
+                        st.table(df_mcq)
 
                         st.download_button(
                             label="📥 下載 Excel 檔案 | Download Excel File",
